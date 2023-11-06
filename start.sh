@@ -1,0 +1,1 @@
+REDIS_URL="redis://localhost:6379" REDIS_SOCKET_TYPE="tcp" USE_STATSD=false LOG_LEVEL=info RUNTIME_ROOT="/Users/daniel/projects/rate-limit-test/bitmovin-ratelimit/runtime" RUNTIME_SUBDIRECTORY=ratelimit  ~/projects/oss/ratelimit/bin/ratelimit

@@ -1,9 +1,11 @@
 package limiter
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 
+	"cloud.google.com/go/logging"
 	"github.com/coocood/freecache"
 	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	logger "github.com/sirupsen/logrus"
@@ -22,6 +24,7 @@ type BaseRateLimiter struct {
 	localCache                 *freecache.Cache
 	nearLimitRatio             float32
 	StatsManager               stats.Manager
+	logger                     *logging.Logger
 }
 
 type LimitInfo struct {
@@ -128,7 +131,18 @@ func (this *BaseRateLimiter) GetResponseDescriptorStatus(key string, limitInfo *
 		}
 	}
 
+	// Log the over_limit requests to GCP Logging
+	if isOverLimit {
+		str := fmt.Sprintf("Limit with key %s was exceeded: %d (threshold: %d)", key, limitInfo.limitAfterIncrease, limitInfo.overLimitThreshold)
+		this.logger.Log(logging.Entry{
+			Payload: str,
+			Labels:  map[string]string{"limit": limitInfo.limit.FullKey, "shadow_mode": fmt.Sprintf("%t", limitInfo.limit.ShadowMode)},
+		})
+		logger.Infof("Limit with key %s was exceeded: %d (threshold: %d)", key, limitInfo.limitAfterIncrease, limitInfo.overLimitThreshold)
+	}
+
 	// If the limit is in ShadowMode, it should be always return OK
+	// We only want to increase stats if the limit was actually over the limit
 	if isOverLimit && limitInfo.limit.ShadowMode {
 		logger.Debugf("Limit with key %s, is in shadow_mode", limitInfo.limit.FullKey)
 		responseDescriptorStatus.Code = pb.RateLimitResponse_OK
@@ -149,6 +163,7 @@ func NewBaseRateLimit(timeSource utils.TimeSource, jitterRand *rand.Rand, expira
 		localCache:                 localCache,
 		nearLimitRatio:             nearLimitRatio,
 		StatsManager:               statsManager,
+		logger:                     initRemoteLog(),
 	}
 }
 
